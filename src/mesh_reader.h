@@ -1,7 +1,11 @@
 #pragma once
 #include <vector>
 #include <string>
+#include <map>
 #include "mesh_reader_structs.h"
+
+// Convert msh element type to elements number of faces
+extern std::map<int,int> msh_Nfaces;
 
 class mesh_reader
 {
@@ -12,6 +16,8 @@ class mesh_reader
     entity read_entity(std::string line);
     msh_node read_node_line(std::string line);
     msh_element read_element_line(std::string line);
+
+    void count_elements(msh_data& data);
 
     public:
     msh_data read_msh(std::string file_path);

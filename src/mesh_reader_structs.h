@@ -45,7 +45,17 @@ struct entities
 //Holds data for whole mesh for return and next operations
 struct msh_data
 {
-    int N_elements, N_nodes, N_physicals;
+    int N_nodes, N_physicals;   // Number of nodes and physical domains (line surface and volume)
+    int N_elements;             // Number of n-Dimensional elements
+
+    // Number of all domain elements
+    int N_points;                                           // 0D elements
+    int N_lines;                                            // 1D elements
+    int N_triangles, N_quads;                               // 2D elements
+    int N_tetrahedra, N_prisms, N_pyramids, N_hexahedra;    // 3D elements
+
+    // Boundary elements
+    int N_boundary_elements;
 
     //list of entities
     entities msh_entities;
@@ -54,7 +64,7 @@ struct msh_data
     std::vector<physical_domain> physical_domains;
 
     //nodes
-    std::vector<msh_node> msh_nodes; 
+    std::vector<msh_node> msh_nodes;
     
     //elements
     std::vector<msh_element> msh_elements;

@@ -2,8 +2,29 @@
 #include "mesh_reader_structs.h"
 #include "fstream"
 #include <vector>
+#include <map>
 #include <string>
 #include <iostream>
+
+// Convert msh element type to elements number of faces
+std::map<int,int> msh_Nfaces = {{2,3},  // Triangle
+                            {3,4},  // Quadrangle
+                            {4,4},  // Tetrahedron
+                            {5,6},  // Hexahedron
+                            {6,5},  // Prism
+                            {7,5}}; // Pyramid
+
+enum msh_elements
+{
+    line = 1,
+    triangle = 2,
+    quadrangle = 3,
+    tetrahedron = 4,
+    hexahedron = 5,
+    prism = 6,
+    pyramid = 7,
+    point = 15
+};
 
 std::vector<std::string> mesh_reader::split(std::string line, std::string delimiter)
 {
@@ -61,6 +82,47 @@ msh_element mesh_reader::read_element_line(std::string line)
     }
 
     return element;
+}
+
+void mesh_reader::count_elements(msh_data& data)
+{
+    for(auto const& element : data.msh_elements)
+    {
+        const int type = element.element_type;
+
+        switch (type)
+        {
+        case triangle:
+            data.N_triangles++;
+            break;
+        case quadrangle:
+            data.N_quads++;
+            break;
+        case tetrahedron:
+            data.N_tetrahedra++;
+            break;
+        case hexahedron:
+            data.N_hexahedra++;
+            break;
+        case prism:
+            data.N_prisms++;
+            break;
+        case pyramid:
+            data.N_pyramids++;
+            break;
+        case line:
+            data.N_lines++;
+            break;
+        case point:
+            data.N_points++;
+            break;
+
+        default:
+            std::cout << "Element type " + std::to_string(type) + " unknown, exiting...\n";
+            exit(1);
+            break;
+        }
+    }
 }
 
 msh_data mesh_reader::read_msh(std::string file_path)
@@ -154,7 +216,7 @@ msh_data mesh_reader::read_msh4(std::string file_path)
     std::vector<std::string> line;
     while(getline(stream,buffer))
     {
-        //read version
+        // Read version
         if(buffer == "$MeshFormat")
         {
             getline(stream,buffer);
@@ -170,7 +232,7 @@ msh_data mesh_reader::read_msh4(std::string file_path)
             }
         }
 
-        //read physicalnames
+        // Read physical names
         if(buffer == "$PhysicalNames")
         {
             getline(stream,buffer);
@@ -185,6 +247,7 @@ msh_data mesh_reader::read_msh4(std::string file_path)
             getline(stream,buffer);
         }
 
+        // Read mesh entities
         if(buffer == "$Entities")
         {
             getline(stream,buffer);
@@ -194,6 +257,7 @@ msh_data mesh_reader::read_msh4(std::string file_path)
             for(auto word : line)
             {
                 const int n = stoi(word);
+                std::cout << n << "\n";
                 mesh.msh_entities.dim_counts[i] += n;
                 mesh.msh_entities.N_entities += n;
                 i++;
@@ -238,6 +302,7 @@ msh_data mesh_reader::read_msh4(std::string file_path)
 
         }
     
+        // Read mesh nodes
         if(buffer == "$Nodes")
         {
             getline(stream,buffer);
@@ -281,6 +346,7 @@ msh_data mesh_reader::read_msh4(std::string file_path)
             }
         }
 
+        // Read mesh elements
         if(buffer == "$Elements")
         {
             getline(stream,buffer);
@@ -299,7 +365,7 @@ msh_data mesh_reader::read_msh4(std::string file_path)
                 line = split(buffer," ");
 
                 int N_elements_to_read = std::stoi(line[3]);
-                int element_type = std::stoi(line[2]);
+                int element_type =  std::stoi(line[2]);
 
                 int entity_tag = std::stoi(line[1])-1;
                 int entity_dim = std::stoi(line[0]);
@@ -336,6 +402,8 @@ msh_data mesh_reader::read_msh4(std::string file_path)
             }
         }
     }
+
+    count_elements(mesh);
 
     return mesh;
 }
