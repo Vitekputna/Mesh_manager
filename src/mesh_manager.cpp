@@ -6,25 +6,40 @@
 #include <algorithm>
 #include <math.h>
 #include <iterator>
+#include <metis.h>
 #include "helper_functions.h"
+
+// Maps element type to {N_vertices,N_faces}
+std::map<int, std::vector<int>> element_type_to_props  = 
+                                   {{1,std::vector<int>{2,1}},      // Line
+                                    {2,std::vector<int>{3,3}},      // Triangle
+                                    {3,std::vector<int>{4,4}},      // Quadrangle
+                                    {4,std::vector<int>{4,4}},      // Tetrahedron
+                                    {5,std::vector<int>{8,6}},      // Hexahedron
+                                    {6,std::vector<int>{6,5}},      // Prism
+                                    {7,std::vector<int>{5,5}}};     // Pyramid
 
 mesh_struct::mesh_struct()
 {
     std::cout << "Mesh struct constructor\n";
     node_pos_array = nullptr;
     V_array = nullptr;
-    N_faces_array = nullptr;
+    Element_type_array = nullptr;
     Phys_idx_array = nullptr;
     Vertex_node_idxs_array = nullptr;
+    Boundary_idxs_array = nullptr;
+    Vertex_node_array_offsets = nullptr;
 }
 
 void mesh_struct::free_data()
 {
     free(node_pos_array);
     free(V_array);
-    free(N_faces_array);
+    free(Element_type_array);
     free(Phys_idx_array);
     free(Vertex_node_idxs_array);
+    free(Boundary_idxs_array);
+    free(Vertex_node_array_offsets);
 }
 
 mesh_struct::~mesh_struct()
@@ -45,6 +60,9 @@ void mesh_manager::print_info()
     // std::cout << "Line entities:\t" << data.msh_entities.dim_counts[1] << "\n"; 
     // std::cout << "Surface entities:\t" << data.msh_entities.dim_counts[2] << "\n";
     // std::cout << "Volume entities:\t" << data.msh_entities.dim_counts[3] << "\n";
+
+    std::cout << "Elements: " << mesh.N_elements << "\n";
+    std::cout << "Vertices: " << mesh.N_element_vertices << "\n";
 
     std::cout << "Faces:\t" << mesh.N_boundary_elements << "\n";
     std::cout << "Nodes:\t" << mesh.N_nodes << "\n";
@@ -73,11 +91,13 @@ void mesh_manager::init_size(const msh_data& data)
     mesh.N_pyramids = data.N_pyramids;
     mesh.N_hexahedra = data.N_hexahedra;
 
-    mesh.N_elements = mesh.N_triangles+mesh.N_quads+mesh.N_tetrahedra
+    mesh.N_elements = mesh.N_points+mesh.N_lines
+                      +mesh.N_triangles+mesh.N_quads+mesh.N_tetrahedra
                       +mesh.N_prisms+mesh.N_pyramids+mesh.N_hexahedra;
 
-    mesh.N_element_vertices = mesh.N_triangles*3+mesh.N_quads*4+mesh.N_tetrahedra*4
-                      +mesh.N_prisms*6+mesh.N_pyramids*5+mesh.N_hexahedra*8;                     
+    mesh.N_element_vertices = mesh.N_points + mesh.N_lines*2
+                              +mesh.N_triangles*3+mesh.N_quads*4+mesh.N_tetrahedra*4
+                              +mesh.N_prisms*6+mesh.N_pyramids*5+mesh.N_hexahedra*8;                     
 }
 
 void mesh_manager::mesh_dimension()
@@ -87,11 +107,13 @@ void mesh_manager::mesh_dimension()
 
     if (N_2D > 0 && N_3D == 0)
     {
-        mesh.dimension = 2;
+        mesh.Dimension = 2;
+        mesh.Face_element_types = std::vector<uint>{1};
     }
     else if(N_3D > 0 && N_2D > 0)
     {
-        mesh.dimension = 3;
+        mesh.Dimension = 3;
+        mesh.Face_element_types = std::vector<uint>{2,3};
     }
     else
     {
@@ -99,25 +121,29 @@ void mesh_manager::mesh_dimension()
         exit(1);
     }
 
-    std::cout << "Mesh dimension is:\t" << mesh.dimension << "\n";
-    
+    std::cout << "Mesh dimension is:\t" << mesh.Dimension << "\n";
 }
 
 void mesh_manager::parse_mesh_boundary(const msh_data& data)
 {
-    int N_boundary = 0;
+    int N_boundary;
     std::vector<int> element_types;
 
-    if(mesh.dimension == 2)
+    if(mesh.Dimension == 2)
     {
         element_types = std::vector<int>{1};
+        N_boundary = data.N_lines;
     }
-    else if (mesh.dimension == 3)
+    else if (mesh.Dimension == 3)
     {
         element_types = std::vector<int>{2,3};
+        N_boundary = data.N_triangles + data.N_quads;
     }
     else{exit(1);}
 
+    mesh.Boundary_idxs_array = (int*)malloc(N_boundary*sizeof(int));
+
+    int j = 0;
     for(auto const& type : element_types)
     {
         auto it = std::vector<msh_element>::const_iterator();
@@ -131,9 +157,11 @@ void mesh_manager::parse_mesh_boundary(const msh_data& data)
             int i = idx;
             while(data.msh_elements[i].element_type == type)
             {
-                N_boundary++;
+                // N_boundary++;
+                mesh.Boundary_idxs_array[j] = data.msh_elements[i].idx;
                 std::advance(it,1);
                 i++;
+                j++;
             }
 
             pos = it;
@@ -147,19 +175,35 @@ void mesh_manager::parse_mesh_boundary(const msh_data& data)
 void mesh_manager::read_mesh(std::string file_path)
 {
     mesh_reader reader;
-    msh_data mesh = reader.read_msh4(file_path);
+    msh_data read_mesh = reader.read_msh4(file_path, std::vector<int>{15});
 
-    // Count elemets and print
-    init_size(mesh);
-    // Get mesh dimension
-    mesh_dimension();
-    //partition mesh in blocks and chunks
-    parse_mesh_boundary(mesh);
-    // parse_mesh_nodes(mesh);
-    // parse_mesh_elements(mesh);
+    init_size(read_mesh);           // Count elemets and print
+    mesh_dimension();               // Get mesh dimension
+    
+    parse_mesh_boundary(read_mesh); // Parse boundary data
+    parse_mesh_nodes(read_mesh);    // Parse nodes 
+    parse_mesh_elements(read_mesh); // Parse elemenets
     // compute_volumes();
     // partition_mesh(mesh);
-    print_info();
+    print_info();                   // Print info to terminal
+
+    // for(int i = 0; i < mesh.N_elements; i++)
+    // {
+    //     const int type = mesh.Element_type_array[i];
+    //     const int N_vertices = element_type_to_props[type][0];
+    //     const int N_faces = element_type_to_props[type][1];
+
+    //     std::cout << mesh.Phys_idx_array[i] << "\n";
+    //     std::cout << N_faces << "\n";
+
+    //     for(int j = 0; j < N_vertices; j++)
+    //     {
+    //         const int idx = mesh.Vertex_node_idxs_array[j+mesh.Vertex_node_array_offsets[i]];
+
+    //         std::cout << mesh.node_pos_array[3*idx] << " ";
+    //     }
+    //     std::cout << "\n\n";
+    // }
 }
 
 void mesh_manager::export_mesh_VTK(std::string file_path){}
@@ -194,31 +238,17 @@ void mesh_manager::parse_mesh_elements(const msh_data& data)
     const int N_elements = mesh.N_elements;
     const int N_element_vertices = mesh.N_element_vertices;
 
-    mesh.N_faces_array = (int*)malloc(N_elements*sizeof(int));                    // Number of faces element has
+    mesh.Element_type_array = (int*)malloc(N_elements*sizeof(int));               // Element type array
     mesh.Phys_idx_array = (int*)malloc(N_elements*sizeof(int));                   // Physical index of element
     mesh.Vertex_node_idxs_array = (int*)malloc(N_element_vertices*sizeof(int));   // List of vertex nodes idxs for all elements
-
-    //WIP
-    mesh.blocks.resize(2);
-
-    mesh.blocks[0].N_chunks_in_block = 1;
-    mesh.blocks[0].chunks.resize(1);
-
-    mesh.blocks[1].N_chunks_in_block = 1;
-    mesh.blocks[1].chunks.resize(1);
+    mesh.Vertex_node_array_offsets = (int*)malloc(N_elements*sizeof(int));        // Where data for vertices starts for given element
 
     int i = 0, j = 0;
     for(const auto& element : data.msh_elements)
     {
-        //Skiping point elements
-        if(element.element_type == 15 || element.element_type == 1){continue;}
-
-        std::cout << element.element_type-2 << "\n";
-        
-        mesh.blocks[element.element_type-2].chunks[0].N_elements++;
-
-        mesh.N_faces_array[i] = element.N_faces;
+        mesh.Element_type_array[i] = element.element_type;
         mesh.Phys_idx_array[i] = element.physical_idx;
+        mesh.Vertex_node_array_offsets[i] = j;
         i++;
         
         for(auto const E_vertex : element.node_idxs)
@@ -239,12 +269,26 @@ void mesh_manager::compute_volumes()
     int k = 0;
     for(int i = 0; i < N_elements; i++)
     {
-        const int n = mesh.N_faces_array[i];
+        const int n = element_type_to_props[mesh.Element_type_array[i]][0];
 
         for(int j = 0; j < n; j++)
         {
-            // std::cout << mesh.Vertex_node_idxs_array[k] << " ";
+            std::cout << mesh.Vertex_node_idxs_array[k] << " ";
             k++;
         }
     }
+}
+
+void mesh_manager::construct_internal_faces()
+{
+    idx_t N_nodes = mesh.N_nodes;
+    idx_t N_elements = mesh.N_elements;
+
+    idx_t numFlag = 0;
+    idx_t nCommon = 2;
+
+    int *xadj;
+    int *adjncy;
+
+    METIS_MeshToDual(&N_elements,&N_nodes,mesh.Vertex_node_idxs_array,mesh.Vertex_node_array_offsets,&nCommon,&numFlag,&xadj,&adjncy);
 }

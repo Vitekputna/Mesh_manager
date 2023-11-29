@@ -4,5 +4,5 @@
 int main()
 {
     mesh_manager manager;
-    manager.read_mesh("3Dmesh.msh");
+    manager.read_mesh("triquad_coarse.msh");
 }

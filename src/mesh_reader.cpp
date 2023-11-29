@@ -2,6 +2,7 @@
 #include "mesh_reader_structs.h"
 #include "fstream"
 #include <vector>
+#include <bits/stdc++.h>
 #include <map>
 #include <string>
 #include <iostream>
@@ -124,6 +125,26 @@ void mesh_reader::count_elements(msh_data& data)
     }
 }
 
+void mesh_reader::remove_elements(msh_data& data, std::vector<int> type_to_remove)
+{
+
+    const unsigned int Initial_size = data.msh_elements.size();
+
+    for(auto const& type : type_to_remove)
+    {
+        auto it = std::remove_if(data.msh_elements.begin(),data.msh_elements.end(),[type](const msh_element& e){return e.element_type == type;});
+        data.msh_elements.erase(it, data.msh_elements.end());
+    }
+
+    const unsigned int Final_size = data.msh_elements.size();
+    std::cout << "Removed " + std::to_string(Initial_size-Final_size) + " elements with types: ";
+    for(auto const& type : type_to_remove)
+    {
+        std::cout << std::to_string(type) << " ";
+    }
+    std::cout << "\n";
+}
+
 msh_data mesh_reader::read_msh(std::string file_path)
 {
     std::ifstream stream;
@@ -201,7 +222,7 @@ msh_data mesh_reader::read_msh(std::string file_path)
     return mesh;
 }
 
-msh_data mesh_reader::read_msh4(std::string file_path)
+msh_data mesh_reader::read_msh4(std::string file_path, std::vector<int> ignored_types)
 {
     std::ifstream stream;
     stream.open(file_path);
@@ -402,6 +423,7 @@ msh_data mesh_reader::read_msh4(std::string file_path)
         }
     }
 
+    remove_elements(mesh,ignored_types);
     count_elements(mesh);
 
     return mesh;

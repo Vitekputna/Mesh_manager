@@ -18,8 +18,9 @@ class mesh_reader
     msh_element read_element_line(std::string line);
 
     void count_elements(msh_data& data);
+    void remove_elements(msh_data& data, std::vector<int> type_to_remove);
 
     public:
     msh_data read_msh(std::string file_path);
-    msh_data read_msh4(std::string file_path);
+    msh_data read_msh4(std::string file_path, std::vector<int> ignored_types = std::vector<int>{});
 };
