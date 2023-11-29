@@ -8,11 +8,11 @@
 
 // Convert msh element type to elements number of faces
 std::map<int,int> msh_Nfaces = {{2,3},  // Triangle
-                            {3,4},  // Quadrangle
-                            {4,4},  // Tetrahedron
-                            {5,6},  // Hexahedron
-                            {6,5},  // Prism
-                            {7,5}}; // Pyramid
+                            {3,4},      // Quadrangle
+                            {4,4},      // Tetrahedron
+                            {5,6},      // Hexahedron
+                            {6,5},      // Prism
+                            {7,5}};     // Pyramid
 
 enum msh_elements
 {
@@ -120,7 +120,6 @@ void mesh_reader::count_elements(msh_data& data)
         default:
             std::cout << "Element type " + std::to_string(type) + " unknown, exiting...\n";
             exit(1);
-            break;
         }
     }
 }
@@ -257,7 +256,6 @@ msh_data mesh_reader::read_msh4(std::string file_path)
             for(auto word : line)
             {
                 const int n = stoi(word);
-                std::cout << n << "\n";
                 mesh.msh_entities.dim_counts[i] += n;
                 mesh.msh_entities.N_entities += n;
                 i++;
@@ -394,6 +392,7 @@ msh_data mesh_reader::read_msh4(std::string file_path)
                     
                     mesh.msh_elements[idx].idx = idx;
                     mesh.msh_elements[idx].element_type = element_type;
+                    mesh.msh_elements[idx].N_faces = msh_Nfaces[element_type];
                     mesh.msh_elements[idx].physical_idx = mesh.msh_entities.entity_vector[entity_idx].phys_tag;
                     mesh.msh_elements[idx].node_idxs = idx_vector;
                 }

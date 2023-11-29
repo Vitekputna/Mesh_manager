@@ -15,7 +15,7 @@ struct msh_node
 struct msh_element
 {
     int idx;
-    char element_type, physical_idx;
+    int N_faces, physical_idx, element_type;
     std::vector<int> node_idxs;
 };
 
@@ -46,16 +46,16 @@ struct entities
 struct msh_data
 {
     int N_nodes, N_physicals;   // Number of nodes and physical domains (line surface and volume)
-    int N_elements;             // Number of n-Dimensional elements
+    int N_elements;             // Number of all elements
 
     // Number of all domain elements
-    int N_points;                                           // 0D elements
-    int N_lines;                                            // 1D elements
-    int N_triangles, N_quads;                               // 2D elements
-    int N_tetrahedra, N_prisms, N_pyramids, N_hexahedra;    // 3D elements
+    int N_points=0;                                           // 0D elements
+    int N_lines=0;                                            // 1D elements
+    int N_triangles=0, N_quads=0;                               // 2D elements
+    int N_tetrahedra=0, N_prisms=0, N_pyramids=0, N_hexahedra=0;    // 3D elements
 
     // Boundary elements
-    int N_boundary_elements;
+    int N_boundary_elements=0;
 
     //list of entities
     entities msh_entities;

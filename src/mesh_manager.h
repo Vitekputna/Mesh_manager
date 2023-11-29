@@ -39,21 +39,32 @@ struct mesh_block
 //array of mesh blocks (whole mesh)
 struct mesh_struct
 {
-    // Mesh dimension
-    int dimension = 2;
+    int dimension = 0;  // Mesh dimension
+
+    int N_points;                                           // 0D elements
+    int N_lines;                                            // 1D elements
+    int N_triangles, N_quads;                               // 2D elements
+    int N_tetrahedra, N_prisms, N_pyramids, N_hexahedra;    // 3D elements
+
+    int N_elements;                 // Number of all elements
+    int N_faces;                    // Number of internal faces in mesh
+    int N_element_vertices;         // Number of all vertices for all elements
+
+    int N_nodes;                    // Number of mesh nodes
+    int N_boundary_elements;        // Number of boundary elements faces/lines
 
     // Number of blocks in mesh
     int N_mesh_blocks = 1;
 
     // Node coordinates
-    double* node_pos;
+    double* node_pos_array;
 
     // Element properties
-    double *V;
-    int *N_faces, *Phys_idx;
+    double *V_array;
+    int *N_faces_array, *Phys_idx_array;
 
     // Element vertices
-    int *Vertex_node_idxs;
+    int *Vertex_node_idxs_array;
 
     // Mesh blocks
     std::vector<mesh_block> blocks;
@@ -64,22 +75,18 @@ struct mesh_struct
     ~mesh_struct();
 };
 
-struct mesh_composition
-{
-    //assumes ordered data faces->trigs->quads
-    int N_nodes;
-    int N_faces, N_triangles, N_quads;
-    int N_boundary_faces;
-};
-
 class mesh_manager
 {
     private:
-    mesh_composition separate_elements(const msh_data& data);
+    void init_size(const msh_data& data);
+    void print_info();
+    void mesh_dimension();
+    void parse_mesh_boundary(const msh_data& data);
+    void parse_mesh_nodes(const msh_data& data);
+    void parse_mesh_elements(const msh_data& data);
     void partition_mesh(const msh_data& data);
 
     public:
-    mesh_composition composition;
     mesh_struct mesh;
     
     //constructors
@@ -87,10 +94,6 @@ class mesh_manager
     ~mesh_manager();
 
     void read_mesh(std::string file_path);
-    void parse_mesh_nodes(const msh_data& data);
-    void parse_mesh_elements(const msh_data& data);
-    
     void compute_volumes();
-    
     void export_mesh_VTK(std::string file_path);
 };
