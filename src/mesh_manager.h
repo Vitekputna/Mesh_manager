@@ -85,13 +85,24 @@ class mesh_manager
     private:
     void print_info();
 
+    // Basic
     void mesh_dimension(const msh_data& data);
+
+    // Parsing
     void parse_mesh_boundary(const msh_data& data);
     void parse_mesh_nodes(const msh_data& data);
     void parse_mesh_elements(const msh_data& data);
-    msh_element add_ghost_element(const msh_element& element, const int where);
-    void construct_internal_faces();
 
+    // Boundary
+    msh_element add_ghost_element(const msh_element& element, const int where);
+
+    // Face construction and manipulation
+    void construct_internal_faces();
+    void find_adjency_structure(int32_t** _xadj, int32_t** _adjncy, int n_common);
+    void find_unique_faces(int32_t** _xadj, int32_t** _adjncy);
+    void find_face_nodes();
+
+    // Partitioning
     void partition_mesh();
 
     public:

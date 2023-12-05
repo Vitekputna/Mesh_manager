@@ -7,6 +7,7 @@
 #include <math.h>
 #include <iterator>
 #include <metis.h>
+#include <set>
 #include "helper_functions.h"
 
 // Maps element type to {N_vertices,N_faces}
@@ -29,6 +30,10 @@ mesh_struct::mesh_struct()
     Boundary_idxs_array = nullptr;
     Element_vertices_idx_array = nullptr;
     Element_vertices_idx_offsets = nullptr;
+
+    Face_vertices_idx_array = nullptr;
+    Face_vertices_idx_offsets = nullptr;
+    Face_ON_idx = nullptr;    
 }
 
 void mesh_struct::free_data()
@@ -40,6 +45,10 @@ void mesh_struct::free_data()
     free(Boundary_idxs_array);
     free(Element_vertices_idx_array);
     free(Element_vertices_idx_offsets);
+
+    free(Face_vertices_idx_array);
+    free(Face_vertices_idx_offsets);
+    free(Face_ON_idx);
 }
 
 mesh_struct::~mesh_struct()
@@ -145,6 +154,12 @@ void mesh_manager::read_mesh(std::string file_path)
     // partition_mesh(mesh);
     print_info();                   // Print info to terminal
 
+
+    for(int i = 0; i < mesh.N_faces; i++)
+    {
+        std::cout << i << " " << mesh.Face_ON_idx[2*i] << " " << mesh.Face_ON_idx[2*i+1] << "\n";
+    }
+
     // for(int i = 0; i < mesh.N_nodes; i++)
     // {
     //     std::cout << mesh.node_pos_array[3*i] << " ";
@@ -166,16 +181,16 @@ void mesh_manager::read_mesh(std::string file_path)
     //     std::cout << "\n";
     // }
 
-    for(int i = 0; i < mesh.N_elements; i++)
-    {
-        std::cout << i << ":\t";
+    // for(int i = 0; i < mesh.N_elements; i++)
+    // {
+    //     std::cout << i << ":\t";
 
-        for(int j = mesh.Element_vertices_idx_offsets[i]; j < mesh.Element_vertices_idx_offsets[i+1];j++)
-        {
-            std::cout << mesh.Element_vertices_idx_array[j] << " ";
-        }
-        std::cout << "\n";
-    }
+    //     for(int j = mesh.Element_vertices_idx_offsets[i]; j < mesh.Element_vertices_idx_offsets[i+1];j++)
+    //     {
+    //         std::cout << mesh.Element_vertices_idx_array[j] << " ";
+    //     }
+    //     std::cout << "\n";
+    // }
 
 }
 
@@ -354,8 +369,7 @@ msh_element mesh_manager::add_ghost_element(const msh_element& element, const in
     return ghost;
 }
 
-// Calls metis for adjency structure WIP
-void mesh_manager::construct_internal_faces()
+void mesh_manager::find_adjency_structure(idx_t** _xadj, idx_t** _adjncy, int n_common)
 {
     idx_t N_nodes = mesh.N_nodes;
     idx_t N_elements = mesh.N_elements;
@@ -363,39 +377,89 @@ void mesh_manager::construct_internal_faces()
     idx_t numFlag = 0;
     idx_t nCommon = 2;
 
-    idx_t *xadj, *adjncy;
+    // idx_t *xadj, *adjncy;
     idx_t *eptr, *eind;
 
     eind = mesh.Element_vertices_idx_array;
     eptr = mesh.Element_vertices_idx_offsets;
 
-    auto output = METIS_MeshToDual(&N_elements,&N_nodes,eptr,eind,&nCommon,&numFlag,&xadj,&adjncy);
+    auto output = METIS_MeshToDual(&N_elements,&N_nodes,eptr,eind,&nCommon,&numFlag,_xadj,_adjncy);
 
     if(output == METIS_OK)
     {
         std::cout << "METIS ok\n";
     }
+}
 
-    for(int i = 0; i < mesh.N_elements; i++)
-    {
-        for(int j = xadj[i]; j < xadj[i+1]; j++)
-        {
-            std::cout << i << " " << adjncy[j] << "\n";
+void mesh_manager::find_unique_faces(idx_t** _xadj, idx_t** _adjncy)
+{
+    std::set<std::pair<int, int>> uniquePairs;
+
+    // Extract pairs and store in the set
+    for (int i = 0; i < mesh.N_elements; ++i) {
+        for (int j = (*_xadj)[i]; j < (*_xadj)[i + 1]; ++j) {
+            int source = i; // Current node
+            int target = (*_adjncy)[j]; // Adjacent node
+
+            // Ensure the pair is stored in a consistent order
+            std::pair<int, int> currentPair = std::make_pair(std::min(source, target), std::max(source, target));
+            uniquePairs.insert(currentPair);
         }
     }
 
-    // for(int i = 0; i < 24;i++)
-    // {
-    //     std::cout << adjncy[i] << " ";
-    // }
-    // std::cout << "\n\n";
 
-    // for(int i = 0; i < mesh.N_elements+1; i++)
-    // {
-    //     std::cout << xadj[i] << " ";
-    // }
-    // std::cout << "\n";
 
+    mesh.N_faces = uniquePairs.size();
+    mesh.Face_ON_idx = (uint32_t*)malloc(2*mesh.N_faces*sizeof(uint32_t));
+
+    int index = 0;
+    for (const auto& pair : uniquePairs) {
+        mesh.Face_ON_idx[index++] = pair.first;
+        mesh.Face_ON_idx[index++] = pair.second;
+    }
+}
+
+void mesh_manager::find_face_nodes()
+{
+    int preallocate_size;
+    if(mesh.Dimension == 2) preallocate_size = 2;
+    else preallocate_size = 4;
+
+    std::vector<int32_t> vec1;
+    std::vector<int32_t> vec2;
+    vec1.reserve(preallocate_size);
+    vec2.reserve(preallocate_size);
+    
+    int owner_idx, neighbour_idx; 
+    int32_t *owner_p, *neighbour_p;
+    for(int i = 0; i < mesh.N_faces; i++)
+    {
+        owner_idx = mesh.Face_ON_idx[2*i];
+        neighbour_idx = mesh.Face_ON_idx[2*i+1];
+
+        owner_p = &mesh.Element_vertices_idx_offsets[owner_idx];
+        neighbour_p = &mesh.Element_vertices_idx_offsets[neighbour_idx];
+
+        
+    }
+}
+
+// Calls metis for adjency structure WIP
+void mesh_manager::construct_internal_faces()
+{
+    int n_common;
+
+    if(mesh.Dimension == 2) n_common = 2;
+    else if (mesh.Dimension == 3) n_common = 3;
+    else exit(1);
+
+    idx_t *xadj, *adjncy;
+    find_adjency_structure(&xadj,&adjncy,n_common);
+    find_unique_faces(&xadj,&adjncy);
+    
     free(xadj);
     free(adjncy);
+
+    find_face_nodes();
+
 }
