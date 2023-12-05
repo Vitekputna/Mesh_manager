@@ -58,14 +58,19 @@ struct mesh_struct
 
     double* node_pos_array;         // Node coordinates
 
-    double *V_array;                // Element volume array
-    int *Element_type_array;        // Array of element types (GMSH types)  
-    int *Phys_idx_array;            // Physical index of each element
-    int *Vertex_node_idxs_array;    // Element vertices
-    int *Vertex_node_array_offsets; // Array of indices where element vertex data starts
-    int *Boundary_idxs_array;       // Index array of boundary elements
+    double *V_array;                        // Element volume array
+    uint8_t *Element_type_array;            // Array of element types (GMSH types)  
+    uint8_t *Phys_idx_array;                // Physical index of each element
+    int32_t *Element_vertices_idx_array;    // Element vertices
+    int32_t *Element_vertices_idx_offsets;  // Array of indices where element vertex data starts
+    uint32_t *Boundary_idxs_array;           // Index array of boundary elements
 
-    std::vector<uint> Face_element_types;   // Face element indices (flux computation)
+    uint32_t *Face_vertices_idx_array;       // 
+    uint32_t *Face_vertices_idx_offsets;     // 
+    uint32_t *Face_ON_idx;
+
+    std::vector<uint8_t> Element_types;         // Which elements are solved 2D=trigs/quads 3D=(tetra,hexa,prisms...)
+    std::vector<uint8_t> Face_element_types;    // Which elements are faces 2D=lines 3D=(triangles,quads)
 
     std::vector<mesh_block> blocks;         // Mesh blocks
 
@@ -78,14 +83,13 @@ struct mesh_struct
 class mesh_manager
 {
     private:
-    void init_size(const msh_data& data);
-
     void print_info();
 
-    void mesh_dimension();
+    void mesh_dimension(const msh_data& data);
     void parse_mesh_boundary(const msh_data& data);
     void parse_mesh_nodes(const msh_data& data);
     void parse_mesh_elements(const msh_data& data);
+    msh_element add_ghost_element(const msh_element& element, const int where);
     void construct_internal_faces();
 
     void partition_mesh();

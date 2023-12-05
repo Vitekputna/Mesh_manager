@@ -2,7 +2,7 @@ CXX = g++
 CXXFLAGS = -Wall -std=c++17 -O0 -ffast-math 
 SRC_DIR = src
 MAIN_DIR = src
-LIB_FLAGS = -fopenmp
+LIB_FLAGS = -fopenmp -lmetis -L/home/vitek/local/lib -lGKlib
 BUILD_DIR = bin
 EXECUTABLE = mesh_manager
 
@@ -28,15 +28,15 @@ all: $(EXECUTABLE)
 
 # Link all the object files into the executable
 $(EXECUTABLE): $(OBJS) $(MAIN_OBJ)
-	$(CXX) $(CXXFLAGS) $(LIB_FLAGS) $^ -o $@
+	$(CXX) $(CXXFLAGS) $^ -o $@ $(LIB_FLAGS)
 
 # Compile all the source files into object files
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.cpp
-	$(CXX) $(CXXFLAGS) $(LIB_FLAGS) -c $< -o $@
+	$(CXX) $(CXXFLAGS) -c $< -o $@ $(LIB_FLAGS)
 
 # Compile the main source file into an object file
 $(MAIN_OBJ): $(MAIN_SRC)
-	$(CXX) $(CXXFLAGS) $(LIB_FLAGS) -c $< -o $@
+	$(CXX) $(CXXFLAGS) -c $< -o $@ $(LIB_FLAGS)
 
 clean:
 	rm -rf $(BUILD_DIR)/*.o
